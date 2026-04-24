@@ -1,0 +1,68 @@
+Task for AI / developer / backend engineer:
+
+Build a Replit-compatible backend extension for my existing VidLab Flask app with these features:
+
+1️⃣ Video Auto-Split
+If uploaded video duration > 5 minutes (300s):
+
+Automatically split video into multiple 5-minute chunks using FFmpeg:
+
+ffmpeg -i input.mp4 -ss <start> -t 300 chunk_<n>.mp4
+Each chunk should be saved in /tmp with unique UUID filenames.
+Keep track of start/end time of each chunk.
+2️⃣ Frame Extraction per Chunk
+Extract frames for each chunk safely on Replit free-tier:
+fps_extract = 1–2 recommended (or 0 for native frames)
+
+Use:
+
+ffmpeg -y -i chunk_<n>.mp4 -vsync 0 /tmp/<chunk_id>_frames/frame_%04d.jpg -q:v 5
+Limit max frames per chunk = 100 for CPU / disk safety.
+Automatically cleanup frame folder after zipping or after generating prompts.
+3️⃣ BLIP-2 Scene Prompt Generation
+Load BLIP-2 (Salesforce/blip2-opt-2.7b or lighter variant if needed) locally:
+For each frame → generate caption / scene prompt.
+Aggregate consecutive frames with similar prompts → produce scene-level prompts.
+Output JSON per chunk:
+{
+  "chunk_id": 1,
+  "duration": 300,
+  "scenes": [
+    {"start": 0, "end": 10, "prompt": "Scene description ..."},
+    {"start": 10, "end": 25, "prompt": "Another scene description ..."}
+  ]
+}
+4️⃣ Aggregate All Chunks
+Return final JSON like:
+{
+  "chunks": [
+    { ... chunk 1 JSON ... },
+    { ... chunk 2 JSON ... },
+    ...
+  ]
+}
+Frontend can display sequentially or allow download JSON.
+5️⃣ Free-Tier Safety & Disk Management
+Pre-process cleanup: delete old /tmp/vidlab_* files before FFmpeg runs.
+Frame folder auto-delete after ZIP / prompt generation.
+Cap frames per chunk (e.g., max 100–150 frames).
+Sequential chunk processing to avoid CPU/disk overload.
+Catch FFmpeg timeout & disk quota errors → return JSON error messages:
+"error": "Disk quota exceeded, use smaller FPS or shorter video"
+"error": "Processing timed out, try shorter chunk"
+6️⃣ Replit Compatibility
+Use /tmp only for storage.
+Python + Flask + FFmpeg only.
+BLIP-2 frame processing can use CPU (CUDA optional if available).
+No external APIs or API keys.
+7️⃣ Deliverables
+/analyze-scenes route for Flask:
+Handles auto-split, frame extraction, BLIP-2 prompt generation
+Returns final JSON
+Auto-cleanup logic for /tmp before & after processing
+Safe handling of long videos (>5 min) in free-tier
+Optional: first 50–100 frames only to limit CPU/disk usage
+
+Bottom-line:
+
+Any uploaded video >5 min → backend splits into 5-min chunks → extracts frames → BLIP-2 generates scene prompts → aggregate JSON returned → fully safe for Replit free-tier.

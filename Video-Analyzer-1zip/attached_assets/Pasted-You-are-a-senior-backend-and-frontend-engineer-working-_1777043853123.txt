@@ -1,0 +1,339 @@
+You are a senior backend and frontend engineer working on an EXISTING project.
+
+PROJECT NAME:
+
+Video Analyzer
+
+This project already exists and is working.
+
+DO NOT create a new project.
+
+You must:
+
+1) Fix the 4K video download failure
+2) Restructure the project so that:
+   - Frontend lives ONLY inside /frontend
+   - Backend lives ONLY inside /backend
+3) Keep this as ONE single project (monorepo)
+4) Prepare the frontend for deployment on Vercel
+5) Keep the backend running on Replit
+
+====================================================
+CRITICAL REQUIREMENT
+====================================================
+
+Frontend and backend MUST be physically separated into folders.
+
+FINAL STRUCTURE MUST LOOK EXACTLY LIKE THIS:
+
+project-root/
+
+  frontend/
+    src/
+    public/
+    package.json
+    vite.config.ts
+    vercel.json
+    .env.example
+
+  backend/
+    app.py
+    requirements.txt
+    youtube_api.py
+    utils/
+    services/
+    downloads/
+    .env.example
+
+  README.md
+
+No frontend code is allowed inside backend.
+
+No backend code is allowed inside frontend.
+
+====================================================
+FRONTEND REQUIREMENTS
+====================================================
+
+Framework:
+
+React
+Vite
+TypeScript
+
+Frontend must:
+
+Run independently
+Build independently
+Deploy independently
+
+Command:
+
+npm run build
+
+Output:
+
+dist/
+
+The frontend must use an environment variable:
+
+VITE_API_BASE_URL
+
+Example:
+
+VITE_API_BASE_URL=https://your-backend.replit.app
+
+All API requests must use:
+
+fetch(`${import.meta.env.VITE_API_BASE_URL}/api/...`)
+
+Do NOT hardcode localhost.
+
+====================================================
+VERCEL DEPLOYMENT REQUIREMENTS
+====================================================
+
+Frontend must be fully deployable on Vercel.
+
+Create:
+
+frontend/vercel.json
+
+Configuration:
+
+- SPA routing support
+- build output directory = dist
+- environment variable support
+
+====================================================
+BACKEND REQUIREMENTS
+====================================================
+
+Backend must run on Replit.
+
+Technology:
+
+Flask
+
+Backend must expose:
+
+GET /api/video/health
+
+POST /api/video/info
+
+POST /api/video/download
+
+Backend must:
+
+Allow CORS from frontend domain
+
+Use environment variable:
+
+ALLOWED_ORIGINS
+
+====================================================
+CRITICAL: FIX 4K VIDEO DOWNLOAD FAILURE
+====================================================
+
+Problem:
+
+4K videos fail to download.
+
+Reason:
+
+YouTube provides 4K as:
+
+Separate video stream
+Separate audio stream
+
+They must be merged.
+
+====================================================
+REQUIRED SOLUTION
+====================================================
+
+Install:
+
+ffmpeg
+
+Use yt-dlp merge feature.
+
+Implementation requirements:
+
+Use:
+
+yt-dlp
+
+Options must include:
+
+format:
+
+bestvideo+bestaudio/best
+
+merge_output_format:
+
+mp4
+
+Example behavior:
+
+If user selects:
+
+4K
+2160p
+Highest
+
+Then:
+
+Download video stream
+Download audio stream
+Merge using ffmpeg
+Return final MP4
+
+====================================================
+MANDATORY BACKEND CONFIG
+====================================================
+
+Detect if ffmpeg is available.
+
+If not available:
+
+Return clear error:
+
+"FFmpeg is required for 4K downloads"
+
+====================================================
+STREAMING REQUIREMENT
+====================================================
+
+Downloads must be streamed.
+
+Do NOT load full file into memory.
+
+Use:
+
+streaming response
+
+====================================================
+DOWNLOAD DIRECTORY
+====================================================
+
+Create folder:
+
+backend/downloads/
+
+All temporary files must be saved here.
+
+After download completes:
+
+Delete temporary files automatically.
+
+====================================================
+ERROR HANDLING
+====================================================
+
+Handle:
+
+4K merge failure
+No audio stream
+Disk full
+Timeout
+Invalid URL
+
+Return JSON errors.
+
+====================================================
+SECURITY REQUIREMENTS
+====================================================
+
+Add:
+
+Rate limiting
+
+Example:
+
+30 requests per minute per IP
+
+Add:
+
+Input validation
+
+Add:
+
+Timeout protection
+
+Example:
+
+Maximum download time:
+
+10 minutes
+
+====================================================
+PERFORMANCE REQUIREMENTS
+====================================================
+
+Must support:
+
+Large videos
+High resolution videos
+Long duration videos
+
+Must be:
+
+Memory efficient
+Non-blocking
+Stable
+
+====================================================
+TEST REQUIREMENTS
+====================================================
+
+Run these tests automatically:
+
+Test 1:
+
+Download:
+
+720p video
+
+Test 2:
+
+Download:
+
+1080p video
+
+Test 3:
+
+Download:
+
+4K video
+
+Test 4:
+
+Download:
+
+Highest quality
+
+Test 5:
+
+Download:
+
+Lowest quality
+
+All tests must pass.
+
+====================================================
+FINAL DELIVERABLES
+====================================================
+
+1) Frontend moved fully into /frontend
+2) Backend moved fully into /backend
+3) Frontend deployable on Vercel
+4) Backend running on Replit
+5) 4K downloads working
+6) Audio + video merge working
+7) Temporary files cleaned automatically
+8) Production-ready architecture
+
+DO NOT create a second project.
+
+Keep everything inside the existing Video Analyzer project.

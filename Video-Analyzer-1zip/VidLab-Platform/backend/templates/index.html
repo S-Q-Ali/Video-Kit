@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VidLab — Free Video Processor</title>
+  <meta name="description" content="Free video analysis, duplication, and processing tool powered by FFmpeg. No API keys, no sign-up required." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --card: #1a1a28;
+      --border: #2a2a3a;
+      --accent: #00e87a;
+      --purple: #7c6fff;
+      --text: #e8e8f8;
+      --muted: #666680;
+      --danger: #ff4466;
+      --warning: #ffaa00;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(rgba(0,232,122,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,232,122,0.03) 1px, transparent 1px);
+      background-size: 44px 44px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* NAV */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,10,15,0.9);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--purple); }
+    .tagline {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+
+    /* MAIN */
+    main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* UPLOAD ZONE */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 56px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      background: var(--surface);
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      box-shadow: 0 0 32px rgba(0,232,122,0.15), inset 0 0 60px rgba(0,232,122,0.03);
+      animation: glow-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(0,232,122,0.1), inset 0 0 40px rgba(0,232,122,0.02); }
+      50% { box-shadow: 0 0 40px rgba(0,232,122,0.25), inset 0 0 80px rgba(0,232,122,0.05); }
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .upload-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .upload-sub {
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .upload-sub em { color: var(--accent); font-style: normal; }
+
+    /* PROGRESS BAR */
+    .progress-wrap {
+      margin-top: 20px;
+      display: none;
+    }
+    .progress-wrap.active { display: block; }
+    .progress-bar-bg {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+    .progress-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 8px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* FILE INFO */
+    .file-info {
+      display: none;
+      margin-top: 20px;
+      padding: 14px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+    .file-info.active { display: flex; }
+    .file-info-icon { font-size: 1.4rem; }
+    .file-info-name { font-weight: 500; font-size: 0.9rem; }
+    .file-info-size { font-size: 0.8rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .file-info-badge {
+      margin-left: auto;
+      background: rgba(0,232,122,0.15);
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* TABS */
+    .tabs-section {
+      display: none;
+      margin-top: 32px;
+    }
+    .tabs-section.active { display: block; }
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 12px 24px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+      letter-spacing: 0.5px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* TAB CONTENT */
+    .tab-content { display: none; opacity: 0; transition: opacity 0.2s ease; }
+    .tab-content.active { display: block; opacity: 1; }
+
+    /* CARDS */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    /* METRIC CARDS ROW */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 800px) { .metrics-row { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 500px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
+
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeInUp 0.4s ease forwards;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .metric-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .metric-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: 'Space Mono', monospace;
+      color: var(--text);
+    }
+    .metric-sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Quality score colors */
+    .q-poor { color: var(--danger) !important; }
+    .q-fair { color: var(--warning) !important; }
+    .q-good { color: var(--purple) !important; }
+    .q-excellent { color: var(--accent) !important; }
+
+    /* DETAIL GRIDS */
+    .section-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-block { margin-bottom: 24px; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .detail-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .detail-item-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .detail-item-value {
+      font-size: 0.9rem;
+      color: var(--text);
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    /* DOWNLOAD BTN */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .btn-accent {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-accent:hover { background: #00ff88; transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .btn-outline:hover { background: rgba(0,232,122,0.1); }
+    .btn-purple {
+      background: var(--purple);
+      color: #fff;
+    }
+    .btn-purple:hover { background: #9480ff; transform: translateY(-1px); }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* SPINNER */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px dashed var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* DUPLICATE TAB */
+    .fps-selector {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .fps-selector label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+    .fps-selector select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .fps-selector select:focus { outline: none; border-color: var(--accent); }
+
+    .step-progress {
+      display: none;
+      margin: 16px 0;
+      gap: 10px;
+      flex-direction: column;
+    }
+    .step-progress.active { display: flex; }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+    .step-item.done { color: var(--accent); }
+    .step-item.running { color: var(--text); }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .step-item.done .step-dot { background: var(--accent); }
+    .step-item.running .step-dot { background: var(--warning); animation: pulse-dot 0.8s ease infinite; }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.4); }
+    }
+
+    .size-compare {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .size-box {
+      text-align: center;
+      flex: 1;
+    }
+    .size-box-label { font-size: 0.7rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .size-box-val { font-size: 1.2rem; font-weight: 700; font-family: 'Space Mono', monospace; }
+    .size-arrow { color: var(--accent); font-size: 1.4rem; }
+
+    .frame-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .frame-thumb {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      aspect-ratio: 16/9;
+      background: var(--surface);
+    }
+    .frame-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .dl-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    /* MODIFY TAB */
+    .ops-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 600px) { .ops-grid { grid-template-columns: 1fr; } }
+
+    .op-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      transition: border-color 0.2s;
+    }
+    .op-card.enabled { border-color: var(--accent); }
+    .op-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .op-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .op-icon { font-size: 1.1rem; }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 38px; height: 20px;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      left: 3px; top: 3px;
+      width: 14px; height: 14px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: rgba(0,232,122,0.3); }
+    .toggle input:checked + .toggle-slider::before {
+      transform: translateX(18px);
+      background: var(--accent);
+    }
+
+    .op-controls {
+      display: none;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .op-card.enabled .op-controls { display: block; }
+
+    .control-group { margin-bottom: 12px; }
+    .control-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="number"], select, input[type="range"] {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      width: 100%;
+    }
+    input[type="number"]:focus, select:focus { outline: none; border-color: var(--accent); }
+    input[type="range"] {
+      padding: 4px 0;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    .radio-group { display: flex; flex-direction: column; gap: 8px; }
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .radio-item input[type="radio"] { accent-color: var(--accent); width: auto; }
+
+    .speed-display {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--accent);
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* RESULT */
+    .result-block {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .result-block.active { display: block; }
+    .result-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      margin-bottom: 6px;
+    }
+    .result-val {
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: 'Space Mono', monospace;
+      color: var(--accent);
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: rgba(255,68,102,0.1);
+      border: 1px solid rgba(255,68,102,0.3);
+      border-radius: 8px;
+      display: none;
+    }
+    .error-msg.active { display: block; }
+
+    .no-audio-msg {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .derived-explain {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .derived-explain strong { color: var(--accent); }
+
+    /* SCENE PROMPTS TAB */
+    .scene-controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .scene-controls label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+    .scene-controls select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .typewriter-log {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      min-height: 20px;
+      margin-top: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .scene-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .scene-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeInUp 0.4s ease forwards;
+    }
+    .scene-card-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+      background: var(--surface);
+    }
+    .scene-card-body {
+      padding: 14px;
+    }
+    .scene-card-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .scene-card-time {
+      font-size: 0.62rem;
+      color: var(--accent, #9f7aea);
+      font-family: 'Space Mono', monospace;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .scene-card-prompt {
+      font-size: 0.875rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .scene-card-frames {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      margin-top: 8px;
+    }
+    .scenes-summary {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .chunk-divider {
+      grid-column: 1 / -1;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent, #9f7aea);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 10px 4px 6px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    .chunk-divider:first-child { border-top: none; margin-top: 0; }
+    .transcript-meta {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .transcript-meta span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .transcript-meta strong { color: var(--text); }
+    .transcript-box {
+      width: 100%;
+      min-height: 220px;
+      max-height: 420px;
+      background: #0e0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.7;
+      padding: 16px;
+      resize: vertical;
+      box-sizing: border-box;
+      font-family: inherit;
+      outline: none;
+    }
+    .transcript-seg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .btn-sm { font-size: 0.72rem; padding: 4px 10px; }
+    .seg-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .seg-row:last-child { border-bottom: none; }
+    .seg-time {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent, #9f7aea);
+      padding-top: 3px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="logo">Vid<span>Lab</span></div>
+    <div class="tagline">// free video processor — no api keys</div>
+  </nav>
+
+  <main>
+    <!-- UPLOAD ZONE -->
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv,.webm" />
+      <span class="upload-icon">⬆</span>
+      <div class="upload-title">Drop your video here or click to browse</div>
+      <div class="upload-sub">
+        Supports <em>MP4, MOV, AVI, MKV, WEBM</em> · Max <em>200MB</em> · No API keys
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">Uploading...</div>
+    </div>
+
+    <div class="file-info" id="fileInfo">
+      <div class="file-info-icon">🎬</div>
+      <div>
+        <div class="file-info-name" id="fileInfoName"></div>
+        <div class="file-info-size" id="fileInfoSize"></div>
+      </div>
+      <div class="file-info-badge">READY</div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs-section" id="tabsSection">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('analysis')">[ Analysis ]</button>
+        <button class="tab-btn" onclick="switchTab('duplicate')">[ Duplicate ]</button>
+        <button class="tab-btn" onclick="switchTab('modify')">[ Modify ]</button>
+        <button class="tab-btn" onclick="switchTab('scenes')">[ Scene Prompts ]</button>
+        <button class="tab-btn" onclick="switchTab('transcript')">[ Transcript ]</button>
+      </div>
+
+      <!-- ANALYSIS TAB -->
+      <div class="tab-content active" id="tab-analysis">
+        <div style="text-align:center; margin-bottom:20px;">
+          <button class="btn btn-accent" onclick="runAnalysis()">
+            <span id="analyzeSpinner" class="spinner" style="display:none;"></span>
+            Analyze Video
+          </button>
+          <div class="progress-wrap" id="analyzeProgressWrap">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="analyzeProgressFill"></div></div>
+            <div class="progress-label" id="analyzeProgressLabel">Reading metadata...</div>
+          </div>
+          <div class="error-msg" id="analyzeError"></div>
+        </div>
+        <div id="analysisResults" style="display:none;">
+          <div class="metrics-row" id="metricsRow"></div>
+          <div class="section-block">
+            <div class="section-title">Video Details</div>
+            <div class="detail-grid" id="videoDetails"></div>
+          </div>
+          <div class="section-block">
+            <div class="section-title">Audio Details</div>
+            <div id="audioDetails"></div>
+          </div>
+          <div class="section-block">
+            <div class="section-title">Format Details</div>
+            <div class="detail-grid" id="formatDetails"></div>
+          </div>
+          <div class="section-block">
+            <div class="section-title">Derived Analysis</div>
+            <div id="derivedDetails"></div>
+          </div>
+          <div style="margin-top:16px;">
+            <button class="btn btn-outline" onclick="downloadJSON()">↓ Download analysis.json</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DUPLICATE TAB -->
+      <div class="tab-content" id="tab-duplicate">
+        <div class="card">
+          <div class="fps-selector">
+            <label>Extract frames at:</label>
+            <select id="fpsExtract">
+              <option value="0.5">Every 2 seconds (0.5 fps)</option>
+              <option value="1" selected>1 frame/second</option>
+              <option value="2">2 frames/second</option>
+              <option value="5">5 frames/second</option>
+              <option value="0">Every frame (native fps)</option>
+            </select>
+          </div>
+          <button class="btn btn-accent" onclick="runDuplicate()">
+            <span id="dupSpinner" class="spinner" style="display:none;"></span>
+            Process Video
+          </button>
+          <div class="progress-wrap" id="dupProgressWrap">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="dupProgressFill"></div></div>
+            <div class="progress-label" id="dupProgressLabel">Starting...</div>
+          </div>
+          <div class="error-msg" id="dupError"></div>
+        </div>
+
+        <div id="dupResults" style="display:none; margin-top:20px;">
+          <div class="size-compare">
+            <div class="size-box">
+              <div class="size-box-label">ORIGINAL</div>
+              <div class="size-box-val" id="origSize">-</div>
+              <div style="font-size:0.7rem; color:var(--muted);">MB</div>
+            </div>
+            <div class="size-arrow">→</div>
+            <div class="size-box">
+              <div class="size-box-label">CLEAN COPY</div>
+              <div class="size-box-val" id="cleanSize">-</div>
+              <div style="font-size:0.7rem; color:var(--muted);">MB</div>
+            </div>
+          </div>
+          <div style="font-size:0.85rem; color:var(--muted); margin-bottom:10px; font-family:'Space Mono',monospace;">
+            <span id="frameCount">0</span> frames extracted
+          </div>
+          <div class="frame-grid" id="frameGrid"></div>
+          <div class="dl-btns" id="dupDlBtns"></div>
+        </div>
+      </div>
+
+      <!-- MODIFY TAB -->
+      <div class="tab-content" id="tab-modify">
+        <div class="ops-grid">
+          <!-- Trim -->
+          <div class="op-card" id="op-trim">
+            <div class="op-header" onclick="toggleOp('trim')">
+              <div class="op-title"><span class="op-icon">✂️</span> Trim</div>
+              <label class="toggle"><input type="checkbox" id="toggle-trim" onchange="toggleOp('trim')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div class="two-col">
+                <div class="control-group">
+                  <label class="control-label">START (seconds)</label>
+                  <input type="number" id="trim-start" value="0" min="0" step="0.1" />
+                </div>
+                <div class="control-group">
+                  <label class="control-label">END (seconds)</label>
+                  <input type="number" id="trim-end" value="30" min="0" step="0.1" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resize -->
+          <div class="op-card" id="op-resize">
+            <div class="op-header" onclick="toggleOp('resize')">
+              <div class="op-title"><span class="op-icon">⤢</span> Resize</div>
+              <label class="toggle"><input type="checkbox" id="toggle-resize" onchange="toggleOp('resize')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div class="control-group">
+                <label class="control-label">PRESET</label>
+                <select id="resize-preset" onchange="handleResizePreset()">
+                  <option value="3840:2160">3840×2160 (4K)</option>
+                  <option value="1920:1080" selected>1920×1080 (FHD)</option>
+                  <option value="1280:720">1280×720 (HD)</option>
+                  <option value="854:480">854×480 (480p)</option>
+                  <option value="640:360">640×360 (360p)</option>
+                  <option value="custom">Custom...</option>
+                </select>
+              </div>
+              <div class="control-group" id="resize-custom" style="display:none;">
+                <label class="control-label">CUSTOM WIDTH</label>
+                <input type="number" id="resize-width" value="1280" min="1" step="2" />
+              </div>
+            </div>
+          </div>
+
+          <!-- FPS -->
+          <div class="op-card" id="op-fps">
+            <div class="op-header" onclick="toggleOp('fps')">
+              <div class="op-title"><span class="op-icon">🎞</span> Change FPS</div>
+              <label class="toggle"><input type="checkbox" id="toggle-fps" onchange="toggleOp('fps')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div class="control-group">
+                <label class="control-label">TARGET FPS (1–120)</label>
+                <input type="number" id="fps-value" value="30" min="1" max="120" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Rotate -->
+          <div class="op-card" id="op-rotate">
+            <div class="op-header" onclick="toggleOp('rotate')">
+              <div class="op-title"><span class="op-icon">↻</span> Rotate</div>
+              <label class="toggle"><input type="checkbox" id="toggle-rotate" onchange="toggleOp('rotate')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div class="radio-group">
+                <label class="radio-item"><input type="radio" name="rotate-deg" value="90" checked /> 90° Clockwise</label>
+                <label class="radio-item"><input type="radio" name="rotate-deg" value="-90" /> 90° Counter-CW</label>
+                <label class="radio-item"><input type="radio" name="rotate-deg" value="180" /> 180°</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mute -->
+          <div class="op-card" id="op-mute">
+            <div class="op-header" onclick="toggleOp('mute')">
+              <div class="op-title"><span class="op-icon">🔇</span> Mute Audio</div>
+              <label class="toggle"><input type="checkbox" id="toggle-mute" onchange="toggleOp('mute')"><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <!-- Extract Audio -->
+          <div class="op-card" id="op-extract_audio">
+            <div class="op-header" onclick="toggleOp('extract_audio')">
+              <div class="op-title"><span class="op-icon">🎵</span> Extract Audio</div>
+              <label class="toggle"><input type="checkbox" id="toggle-extract_audio" onchange="toggleOp('extract_audio')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div style="font-size:0.8rem; color:var(--muted);">Outputs MP3 audio file only.</div>
+            </div>
+          </div>
+
+          <!-- Speed -->
+          <div class="op-card" id="op-speed" style="grid-column: span 2;">
+            <div class="op-header" onclick="toggleOp('speed')">
+              <div class="op-title"><span class="op-icon">⚡</span> Change Speed</div>
+              <label class="toggle"><input type="checkbox" id="toggle-speed" onchange="toggleOp('speed')"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="op-controls">
+              <div class="control-group">
+                <label class="control-label">SPEED MULTIPLIER</label>
+                <input type="range" id="speed-value" min="0.25" max="4" step="0.25" value="1.5" oninput="updateSpeedDisplay()" />
+                <div class="speed-display" id="speedDisplay">1.5x</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-purple" onclick="runModify()" style="width:100%;">
+          <span id="modifySpinner" class="spinner" style="display:none;"></span>
+          Process Video
+        </button>
+        <div class="progress-wrap" id="modifyProgressWrap">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="modifyProgressFill"></div></div>
+          <div class="progress-label" id="modifyProgressLabel">Processing...</div>
+        </div>
+        <div class="error-msg" id="modifyError"></div>
+
+        <div class="result-block" id="modifyResult">
+          <div class="result-label">OUTPUT FILE</div>
+          <div class="result-val" id="modifyResultVal">-</div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-accent" id="modifyDlBtn">↓ Download</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCENE PROMPTS TAB -->
+      <div class="tab-content" id="tab-scenes">
+        <div class="card">
+          <div class="scene-controls">
+            <label>Sample rate:</label>
+            <select id="sceneFps">
+              <option value="0.5">Every 2 seconds (0.5 fps)</option>
+              <option value="1">1 frame/second</option>
+              <option value="2" selected>2 frames/second</option>
+            </select>
+          </div>
+          <p style="font-size:0.82rem; color:var(--muted); margin-bottom:16px; line-height:1.5;">
+            Analyzes up to 60 frames using BLIP-large (on-device AI). Captions are embedded via sentence-transformers and grouped into scenes by cosine similarity. Generates a detailed prompt per scene covering objects, actions, environment, lighting, mood, and perspective. <em style="color:var(--warning);">First run downloads the models (~1 GB).</em>
+          </p>
+          <button class="btn btn-purple" onclick="runScenePrompts()">
+            <span id="sceneSpinner" class="spinner" style="display:none;"></span>
+            Generate Scene Prompts
+          </button>
+          <div class="progress-wrap" id="sceneProgressWrap">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="sceneProgressFill"></div></div>
+            <div class="progress-label" id="sceneProgressLabel">Initializing...</div>
+          </div>
+          <div class="typewriter-log" id="sceneTypewriter"></div>
+          <div class="error-msg" id="sceneError"></div>
+        </div>
+
+        <div id="sceneResults" style="display:none; margin-top:20px;">
+          <div class="scenes-summary" id="scenesSummary"></div>
+          <div class="dl-btns" style="margin-bottom:16px;">
+            <button class="btn btn-outline" onclick="downloadScenesJSON()">↓ Download scenes.json</button>
+          </div>
+          <div class="scene-grid" id="sceneGrid"></div>
+        </div>
+      </div>
+
+      <!-- TRANSCRIPT TAB -->
+      <div class="tab-content" id="tab-transcript">
+        <div class="card">
+          <p style="font-size:0.82rem; color:var(--muted); margin-bottom:16px; line-height:1.5;">
+            Extracts audio and runs on-device speech recognition using OpenAI Whisper (tiny model, ~75 MB). No API key required. Works best on clear speech; limited to <strong>5 minutes</strong> on the free tier. <em style="color:var(--warning);">First run downloads the model.</em>
+          </p>
+          <button class="btn btn-purple" onclick="runTranscript()">
+            <span id="transcriptSpinner" class="spinner" style="display:none;"></span>
+            Generate Transcript
+          </button>
+          <div class="progress-wrap" id="transcriptProgressWrap">
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="transcriptProgressFill"></div></div>
+            <div class="progress-label" id="transcriptProgressLabel">Initializing...</div>
+          </div>
+          <div class="typewriter-log" id="transcriptTypewriter"></div>
+          <div class="error-msg" id="transcriptError"></div>
+        </div>
+
+        <div id="transcriptResults" style="display:none; margin-top:20px;">
+          <div class="card">
+            <div class="transcript-meta" id="transcriptMeta"></div>
+            <textarea class="transcript-box" id="transcriptBox" readonly spellcheck="false"></textarea>
+            <div class="dl-btns" style="margin-top:14px;">
+              <button id="dlTxtBtn" class="btn btn-outline" onclick="downloadTranscriptTxtBlob()">↓ Download .txt</button>
+              <button class="btn btn-outline" onclick="downloadTranscriptJSON()">↓ Download .json</button>
+            </div>
+          </div>
+
+          <div class="card" id="transcriptSegmentsCard" style="margin-top:16px; display:none;">
+            <div class="transcript-seg-header">
+              <span>Timed Segments</span>
+              <button class="btn btn-outline btn-sm" onclick="toggleSegments()">Show</button>
+            </div>
+            <div id="transcriptSegments" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    let currentFileId    = null;
+    let analysisData     = null;
+    let dupResultData    = null;
+    let sceneData        = null;
+    let transcriptData   = null;
+
+    // UPLOAD
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      uploadZone.classList.add('drag-over');
+    });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+    fileInput.addEventListener('change', e => {
+      if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+      const maxSize = 200 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert('File too large. Maximum size is 200MB.');
+        return;
+      }
+      const allowed = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm', 'video/avi', 'video/mov'];
+      const ext = file.name.split('.').pop().toLowerCase();
+      const allowedExts = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+      if (!allowedExts.includes(ext)) {
+        alert('File type not supported. Use MP4, MOV, AVI, MKV, or WEBM.');
+        return;
+      }
+      uploadFile(file);
+    }
+
+    function uploadFile(file) {
+      const progressWrap = document.getElementById('progressWrap');
+      const progressFill = document.getElementById('progressFill');
+      const progressLabel = document.getElementById('progressLabel');
+      progressWrap.classList.add('active');
+      progressFill.style.width = '0%';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progressFill.style.width = pct + '%';
+          progressLabel.textContent = `Uploading... ${pct}%`;
+        }
+      });
+      xhr.addEventListener('load', () => {
+        progressWrap.classList.remove('active');
+        if (xhr.status === 200) {
+          const data = JSON.parse(xhr.responseText);
+          currentFileId = data.file_id;
+          showFileInfo(data.filename, data.size_mb);
+          showTabs();
+          // Reset all tab state
+          analysisData = null;
+          sceneData = null;
+          document.getElementById('analysisResults').style.display = 'none';
+          document.getElementById('dupResults').style.display = 'none';
+          document.getElementById('modifyResult').classList.remove('active');
+          document.getElementById('sceneResults').style.display = 'none';
+          document.getElementById('sceneError').classList.remove('active');
+        } else {
+          const err = JSON.parse(xhr.responseText);
+          alert('Upload failed: ' + (err.error || 'Unknown error'));
+        }
+      });
+      xhr.addEventListener('error', () => {
+        progressWrap.classList.remove('active');
+        alert('Upload failed. Check your connection.');
+      });
+      xhr.open('POST', '/upload');
+      xhr.send(formData);
+    }
+
+    function showFileInfo(name, sizeMb) {
+      document.getElementById('fileInfoName').textContent = name;
+      document.getElementById('fileInfoSize').textContent = sizeMb + ' MB';
+      document.getElementById('fileInfo').classList.add('active');
+    }
+
+    function showTabs() {
+      document.getElementById('tabsSection').classList.add('active');
+    }
+
+    function switchTab(name) {
+      const tabNames = ['analysis', 'duplicate', 'modify', 'scenes', 'transcript'];
+      document.querySelectorAll('.tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', tabNames[i] === name);
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+    }
+
+    function renderAnalysis(d) {
+      // Metrics row
+      const metrics = [
+        { label: 'FPS', value: d.fps, sub: 'frames/sec' },
+        { label: 'Resolution', value: d.resolution, sub: d.aspect_ratio },
+        { label: 'Duration', value: formatDuration(d.duration_seconds), sub: d.duration_seconds + 's' },
+        { label: 'Codec', value: d.codec.toUpperCase(), sub: d.profile !== 'unknown' ? d.profile : '' },
+        { label: 'Bitrate', value: d.bitrate_kbps, sub: 'kbps' },
+        {
+          label: 'Quality',
+          value: d.quality_score,
+          sub: d.quality_label,
+          qClass: getQClass(d.quality_score)
+        },
+      ];
+      const row = document.getElementById('metricsRow');
+      row.innerHTML = metrics.map((m, i) => `
+        <div class="metric-card" style="animation-delay:${i * 0.05}s">
+          <div class="metric-label">${m.label}</div>
+          <div class="metric-value ${m.qClass || ''}">${m.value}</div>
+          ${m.sub ? `<div class="metric-sub">${m.sub}</div>` : ''}
+        </div>
+      `).join('');
+
+      // Video details
+      const videoFields = [
+        ['Codec', d.codec],
+        ['Codec Long Name', d.codec_long],
+        ['Width', d.width + 'px'],
+        ['Height', d.height + 'px'],
+        ['FPS', d.fps],
+        ['Duration', d.duration_seconds + 's'],
+        ['Total Frames', d.total_frames],
+        ['Pixel Format', d.pixel_format],
+        ['Color Space', d.color_space],
+        ['Color Range', d.color_range],
+        ['Color Primaries', d.color_primaries],
+        ['Bitrate', d.bitrate_kbps + ' kbps'],
+        ['Video Bitrate', d.video_bitrate_kbps !== null ? d.video_bitrate_kbps + ' kbps' : 'N/A'],
+        ['File Size', d.file_size_mb + ' MB'],
+        ['Aspect Ratio', d.aspect_ratio],
+        ['Profile', d.profile],
+        ['Level', d.level],
+        ['Stream Frames', d.nb_frames || 'N/A'],
+      ];
+      document.getElementById('videoDetails').innerHTML = videoFields.map(([l, v]) => `
+        <div class="detail-item">
+          <div class="detail-item-label">${l}</div>
+          <div class="detail-item-value">${v}</div>
+        </div>
+      `).join('');
+
+      // Audio details
+      if (d.has_audio) {
+        const audioFields = [
+          ['Codec', d.audio_codec],
+          ['Codec Long Name', d.audio_codec_long],
+          ['Sample Rate', d.audio_sample_rate + ' Hz'],
+          ['Channels', d.audio_channels],
+          ['Channel Layout', d.audio_channel_layout],
+          ['Bitrate', d.audio_bitrate_kbps !== null ? d.audio_bitrate_kbps + ' kbps' : 'N/A'],
+        ];
+        document.getElementById('audioDetails').innerHTML = `<div class="detail-grid">${audioFields.map(([l,v]) => `
+          <div class="detail-item">
+            <div class="detail-item-label">${l}</div>
+            <div class="detail-item-value">${v}</div>
+          </div>
+        `).join('')}</div>`;
+      } else {
+        document.getElementById('audioDetails').innerHTML = `<div class="no-audio-msg">No audio track found in this video.</div>`;
+      }
+
+      // Format details
+      const fmtFields = [
+        ['Format', d.format_name],
+        ['Format Long Name', d.format_long],
+        ['Number of Streams', d.nb_streams],
+      ];
+      document.getElementById('formatDetails').innerHTML = fmtFields.map(([l,v]) => `
+        <div class="detail-item">
+          <div class="detail-item-label">${l}</div>
+          <div class="detail-item-value">${v}</div>
+        </div>
+      `).join('');
+
+      // Derived
+      const qExplain = buildQualityExplain(d);
+      document.getElementById('derivedDetails').innerHTML = `
+        <div class="detail-grid" style="margin-bottom:16px;">
+          <div class="detail-item">
+            <div class="detail-item-label">Detected Type</div>
+            <div class="detail-item-value" style="color:var(--accent);">${d.detected_type}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-item-label">Quality Score</div>
+            <div class="detail-item-value ${getQClass(d.quality_score)}">${d.quality_score}/100 — ${d.quality_label}</div>
+          </div>
+        </div>
+        <div class="derived-explain">${qExplain}</div>
+      `;
+
+      document.getElementById('analysisResults').style.display = 'block';
+    }
+
+    function buildQualityExplain(d) {
+      const parts = [];
+      if (d.height >= 2160) parts.push(`<strong>4K resolution</strong> (+40)`);
+      else if (d.height >= 1080) parts.push(`<strong>Full HD resolution</strong> (+30)`);
+      else if (d.height >= 720) parts.push(`<strong>HD resolution</strong> (+20)`);
+      else if (d.height >= 480) parts.push(`<strong>SD resolution</strong> (+10)`);
+      if (d.fps >= 60) parts.push(`<strong>${d.fps}fps high frame rate</strong> (+20)`);
+      else if (d.fps >= 30) parts.push(`<strong>${d.fps}fps smooth playback</strong> (+15)`);
+      else if (d.fps >= 24) parts.push(`<strong>${d.fps}fps cinematic</strong> (+10)`);
+      if (d.bitrate_kbps >= 8000) parts.push(`<strong>${d.bitrate_kbps}kbps high bitrate</strong> (+20)`);
+      else if (d.bitrate_kbps >= 4000) parts.push(`<strong>${d.bitrate_kbps}kbps good bitrate</strong> (+15)`);
+      else if (d.bitrate_kbps >= 1000) parts.push(`<strong>${d.bitrate_kbps}kbps moderate bitrate</strong> (+10)`);
+      const codecL = d.codec.toLowerCase();
+      if (['hevc','h265','av1','vp9'].includes(codecL)) parts.push(`<strong>${d.codec} efficient codec</strong> (+20)`);
+      else if (['h264','avc'].includes(codecL)) parts.push(`<strong>${d.codec} standard codec</strong> (+15)`);
+      return 'Quality score breakdown: ' + parts.join(', ') + '.';
+    }
+
+    function getQClass(score) {
+      if (score < 40) return 'q-poor';
+      if (score < 60) return 'q-fair';
+      if (score < 80) return 'q-good';
+      return 'q-excellent';
+    }
+
+    function formatDuration(s) {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = Math.floor(s % 60);
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+      return `${m}:${String(sec).padStart(2,'0')}`;
+    }
+
+    function downloadJSON() {
+      if (!analysisData) return;
+      const blob = new Blob([JSON.stringify(analysisData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'analysis.json';
+      a.click();
+    }
+
+    // ── SSE stream reader ──────────────────────────────────────────────────────
+    async function readSSE(url, payload, onEvent) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = 'Request failed';
+        try { msg = JSON.parse(text).error || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+        for (const chunk of chunks) {
+          const line = chunk.split('\n').find(l => l.startsWith('data: '));
+          if (line) {
+            const evt = JSON.parse(line.slice(6));
+            onEvent(evt);
+            if (evt.done || evt.error) return evt;
+          }
+        }
+      }
+      return null;
+    }
+
+    function setProgress(prefix, pct, label) {
+      const wrap = document.getElementById(prefix + 'ProgressWrap');
+      const fill = document.getElementById(prefix + 'ProgressFill');
+      const lbl  = document.getElementById(prefix + 'ProgressLabel');
+      if (!wrap) return;
+      wrap.classList.add('active');
+      fill.style.width = pct + '%';
+      if (label) lbl.textContent = label + '  ' + pct + '%';
+    }
+
+    function hideProgress(prefix) {
+      const wrap = document.getElementById(prefix + 'ProgressWrap');
+      if (wrap) wrap.classList.remove('active');
+    }
+
+    // ── Analysis ───────────────────────────────────────────────────────────────
+    async function runAnalysis() {
+      if (!currentFileId) return;
+      const spinner = document.getElementById('analyzeSpinner');
+      const errEl   = document.getElementById('analyzeError');
+      spinner.style.display = 'inline-block';
+      errEl.classList.remove('active');
+      document.getElementById('analysisResults').style.display = 'none';
+      setProgress('analyze', 0, 'Starting...');
+
+      try {
+        const evt = await readSSE('/analyze', { file_id: currentFileId }, ev => {
+          if (ev.percent !== undefined) setProgress('analyze', ev.percent, ev.step);
+        });
+        if (!evt) throw new Error('No response from server');
+        if (evt.error) throw new Error(evt.error);
+        analysisData = evt.result;
+        renderAnalysis(analysisData);
+        hideProgress('analyze');
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.add('active');
+        hideProgress('analyze');
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    // DUPLICATE
+    async function runDuplicate() {
+      if (!currentFileId) return;
+      const spinner = document.getElementById('dupSpinner');
+      const errEl   = document.getElementById('dupError');
+      spinner.style.display = 'inline-block';
+      errEl.classList.remove('active');
+      document.getElementById('dupResults').style.display = 'none';
+      setProgress('dup', 0, 'Starting...');
+
+      const fpsExtract = parseFloat(document.getElementById('fpsExtract').value);
+
+      try {
+        const evt = await readSSE('/duplicate',
+          { file_id: currentFileId, fps_extract: fpsExtract },
+          ev => { if (ev.percent !== undefined) setProgress('dup', ev.percent, ev.step); }
+        );
+        if (!evt) throw new Error('No response from server');
+        if (evt.error) throw new Error(evt.error);
+        hideProgress('dup');
+        dupResultData = evt.result;
+        renderDupResults(evt.result);
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.add('active');
+        hideProgress('dup');
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    function renderDupResults(data) {
+      document.getElementById('origSize').textContent = data.original_size_mb;
+      document.getElementById('cleanSize').textContent = data.clean_size_mb;
+      document.getElementById('frameCount').textContent = data.frame_count;
+
+      // Preview frames
+      const grid = document.getElementById('frameGrid');
+      grid.innerHTML = data.preview_frames.map(f => `
+        <div class="frame-thumb">
+          <img src="/frame/${data.frames_dir_id}/${f}" alt="Frame" loading="lazy" />
+        </div>
+      `).join('');
+
+      // Download buttons
+      const btns = document.getElementById('dupDlBtns');
+      btns.innerHTML = `
+        <a class="btn btn-accent" href="/download/${data.clean_video_id}">↓ Download Clean Video (.mp4)</a>
+        <a class="btn btn-outline" href="/download/${data.frames_zip_id}">↓ Download All Frames (.zip)</a>
+      `;
+
+      document.getElementById('dupResults').style.display = 'block';
+    }
+
+    // MODIFY
+    function toggleOp(name) {
+      const card = document.getElementById('op-' + name);
+      const checkbox = document.getElementById('toggle-' + name);
+      const enabled = checkbox.checked;
+      card.classList.toggle('enabled', enabled);
+    }
+
+    function handleResizePreset() {
+      const val = document.getElementById('resize-preset').value;
+      document.getElementById('resize-custom').style.display = val === 'custom' ? 'block' : 'none';
+    }
+
+    function updateSpeedDisplay() {
+      const v = parseFloat(document.getElementById('speed-value').value);
+      document.getElementById('speedDisplay').textContent = v + 'x';
+    }
+
+    // ── Scene Prompts ───────────────────────────────────────────────────────────
+    let _typewriterInterval = null;
+
+    function setTypewriter(text) {
+      const el = document.getElementById('sceneTypewriter');
+      if (_typewriterInterval) clearInterval(_typewriterInterval);
+      el.textContent = '';
+      let i = 0;
+      _typewriterInterval = setInterval(() => {
+        el.textContent = text.slice(0, i + 1);
+        i++;
+        if (i >= text.length) clearInterval(_typewriterInterval);
+      }, 18);
+    }
+
+    async function runScenePrompts() {
+      if (!currentFileId) return;
+      const spinner = document.getElementById('sceneSpinner');
+      const errEl   = document.getElementById('sceneError');
+      spinner.style.display = 'inline-block';
+      errEl.classList.remove('active');
+      document.getElementById('sceneResults').style.display = 'none';
+      setProgress('scene', 0, 'Starting...');
+      document.getElementById('sceneTypewriter').textContent = '';
+
+      const fps = parseFloat(document.getElementById('sceneFps').value);
+
+      try {
+        const evt = await readSSE('/analyze-scenes',
+          { file_id: currentFileId, fps },
+          ev => {
+            if (ev.percent !== undefined) {
+              setProgress('scene', ev.percent, ev.step);
+              if (ev.step) setTypewriter('▶ ' + ev.step);
+            }
+          }
+        );
+        if (!evt) throw new Error('No response from server');
+        if (evt.error) throw new Error(evt.error);
+        sceneData = evt.result;
+        hideProgress('scene');
+        if (_typewriterInterval) clearInterval(_typewriterInterval);
+        document.getElementById('sceneTypewriter').textContent = '';
+        renderSceneResults(sceneData);
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.add('active');
+        hideProgress('scene');
+        if (_typewriterInterval) clearInterval(_typewriterInterval);
+        document.getElementById('sceneTypewriter').textContent = '';
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    function _fmtSec(s) {
+      const m = Math.floor(s / 60);
+      const sec = (s % 60).toFixed(1).padStart(4, '0');
+      return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    }
+
+    function renderSceneResults(data) {
+      const { scenes, total_frames, total_scenes, chunks, is_multi_chunk, total_chunks, video_duration } = data;
+
+      // Summary line
+      let summaryParts = [`${total_scenes} scene${total_scenes !== 1 ? 's' : ''} from ${total_frames} frames`];
+      if (is_multi_chunk && total_chunks > 1) {
+        const durMin = video_duration ? `${Math.round(video_duration / 60 * 10) / 10} min` : '';
+        summaryParts.push(`${total_chunks} chunks${durMin ? ' · ' + durMin : ''}`);
+      }
+      document.getElementById('scenesSummary').textContent = summaryParts.join(' · ');
+
+      const grid = document.getElementById('sceneGrid');
+      grid.innerHTML = '';
+
+      // Build a lookup: scene_num → chunk start/end for chunk dividers
+      let lastChunkId = null;
+
+      Object.entries(scenes).forEach(([sceneNum, scene], idx) => {
+        const thumb      = scene.thumbnail || scene.frame_list[0];
+        const frameCount = scene.frame_list.length;
+        const startSec   = scene.scene_start_sec ?? null;
+        const endSec     = scene.scene_end_sec   ?? null;
+        const timeLabel  = (startSec !== null && endSec !== null)
+          ? `${_fmtSec(startSec)} – ${_fmtSec(endSec)}`
+          : `${frameCount} frame${frameCount !== 1 ? 's' : ''}`;
+
+        // Insert chunk divider header when the chunk changes
+        if (is_multi_chunk && scene.chunk_id !== undefined && scene.chunk_id !== lastChunkId) {
+          lastChunkId = scene.chunk_id;
+          const chunkMeta = chunks && chunks.find(c => c.chunk_id === scene.chunk_id);
+          const chunkStart = chunkMeta ? _fmtSec(chunkMeta.start_sec) : '';
+          const chunkEnd   = chunkMeta ? _fmtSec(chunkMeta.end_sec)   : '';
+          const divider = document.createElement('div');
+          divider.className = 'chunk-divider';
+          divider.textContent = `Chunk ${scene.chunk_id}  ${chunkStart} – ${chunkEnd}`;
+          grid.appendChild(divider);
+        }
+
+        const card = document.createElement('div');
+        card.className = 'scene-card';
+        card.style.animationDelay = (idx * 0.04) + 's';
+        card.innerHTML = `
+          <img class="scene-card-thumb" src="/scene-frame/${scene.frames_dir_id}/${thumb}" alt="Scene ${sceneNum}" loading="lazy" />
+          <div class="scene-card-body">
+            <div class="scene-card-label">Scene ${sceneNum}
+              <span class="scene-card-time">${timeLabel}</span>
+            </div>
+            <div class="scene-card-prompt">${scene.prompt}</div>
+            <div class="scene-card-frames">${frameCount} frame${frameCount !== 1 ? 's' : ''}</div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      document.getElementById('sceneResults').style.display = 'block';
+    }
+
+    function downloadScenesJSON() {
+      if (!sceneData) return;
+      const export_data = {
+        total_scenes:   sceneData.total_scenes,
+        total_frames:   sceneData.total_frames,
+        total_chunks:   sceneData.total_chunks   || 1,
+        video_duration: sceneData.video_duration || null,
+        chunks:         sceneData.chunks         || [],
+        scenes:         {},
+      };
+      Object.entries(sceneData.scenes).forEach(([num, scene]) => {
+        export_data.scenes[`scene_${num}`] = {
+          chunk_id:        scene.chunk_id,
+          frame_list:      scene.frame_list,
+          prompt:          scene.prompt,
+          scene_start_sec: scene.scene_start_sec,
+          scene_end_sec:   scene.scene_end_sec,
+        };
+      });
+      const blob = new Blob([JSON.stringify(export_data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'scenes.json';
+      a.click();
+    }
+
+    // ── TRANSCRIPT ────────────────────────────────────────────────────────────
+
+    async function runTranscript() {
+      if (!currentFileId) return;
+
+      const spinner  = document.getElementById('transcriptSpinner');
+      const errEl    = document.getElementById('transcriptError');
+      const twEl     = document.getElementById('transcriptTypewriter');
+      const progWrap = document.getElementById('transcriptProgressWrap');
+
+      spinner.style.display = 'inline-block';
+      errEl.classList.remove('active');
+      errEl.textContent = '';
+      twEl.textContent  = '';
+      progWrap.classList.add('active');
+      document.getElementById('transcriptResults').style.display = 'none';
+      setProgress('transcript', 0, 'Starting...');
+
+      try {
+        const resp = await fetch('/generate-transcript', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ file_id: currentFileId }),
+        });
+
+        if (!resp.ok || !resp.body) {
+          throw new Error(`Server returned ${resp.status}`);
+        }
+
+        const reader  = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let   buffer  = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
+
+          for (const part of parts) {
+            const line = part.replace(/^data:\s*/, '').trim();
+            if (!line) continue;
+            let msg;
+            try { msg = JSON.parse(line); } catch { continue; }
+
+            if (msg.error) {
+              errEl.textContent = msg.error;
+              errEl.classList.add('active');
+              spinner.style.display = 'none';
+              return;
+            }
+            if (msg.step) {
+              setProgress('transcript', msg.percent || 0, msg.step);
+              twEl.textContent = msg.step;
+            }
+            if (msg.done && msg.result) {
+              setProgress('transcript', 100, 'Done!');
+              transcriptData = msg.result;
+              renderTranscript(msg.result);
+            }
+          }
+        }
+      } catch (err) {
+        errEl.textContent = `Request failed: ${err.message}`;
+        errEl.classList.add('active');
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    function renderTranscript(data) {
+      const { transcript, language, segments, word_count, txt_file } = data;
+
+      // Meta row
+      const metaEl = document.getElementById('transcriptMeta');
+      metaEl.innerHTML = [
+        `<span>Language: <strong>${(language || 'unknown').toUpperCase()}</strong></span>`,
+        `<span>Words: <strong>${word_count || transcript.split(/\s+/).length}</strong></span>`,
+        segments && segments.length
+          ? `<span>Paragraphs: <strong>${segments.length}</strong></span>` : '',
+      ].join('');
+
+      // Pre-formatted "Speaker 1 (mm:ss)\nText..." transcript
+      document.getElementById('transcriptBox').value = transcript;
+
+      // Wire download .txt button to server-side file if available, else blob
+      const dlTxtBtn = document.getElementById('dlTxtBtn');
+      if (txt_file) {
+        dlTxtBtn.onclick = () => { window.location.href = txt_file; };
+      } else {
+        dlTxtBtn.onclick = () => downloadTranscriptTxtBlob();
+      }
+
+      // Timed segments panel — each segment already has .ts (mm:ss) from backend
+      const segCard = document.getElementById('transcriptSegmentsCard');
+      const segBox  = document.getElementById('transcriptSegments');
+      if (segments && segments.length > 0) {
+        segCard.style.display = 'block';
+        segBox.innerHTML = segments.map(s => `
+          <div class="seg-row">
+            <div class="seg-time">${s.speaker || 'Speaker 1'} (${s.ts || _fmtSec(s.start)})</div>
+            <div>${s.text}</div>
+          </div>
+        `).join('');
+      } else {
+        segCard.style.display = 'none';
+      }
+
+      document.getElementById('transcriptResults').style.display = 'block';
+    }
+
+    let _segmentsVisible = false;
+    function toggleSegments() {
+      _segmentsVisible = !_segmentsVisible;
+      const segBox = document.getElementById('transcriptSegments');
+      const btn    = document.querySelector('#transcriptSegmentsCard .btn-sm');
+      segBox.style.display = _segmentsVisible ? 'block' : 'none';
+      btn.textContent      = _segmentsVisible ? 'Hide' : 'Show';
+    }
+
+    function downloadTranscriptTxtBlob() {
+      if (!transcriptData) return;
+      const blob = new Blob([transcriptData.transcript], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'transcript.txt';
+      a.click();
+    }
+
+    function downloadTranscriptJSON() {
+      if (!transcriptData) return;
+      const blob = new Blob([JSON.stringify(transcriptData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'transcript.json';
+      a.click();
+    }
+
+    async function runModify() {
+      if (!currentFileId) return;
+      const spinner = document.getElementById('modifySpinner');
+      const errEl   = document.getElementById('modifyError');
+      spinner.style.display = 'inline-block';
+      errEl.classList.remove('active');
+      document.getElementById('modifyResult').classList.remove('active');
+      setProgress('modify', 0, 'Starting...');
+
+      const operations = {};
+
+      if (document.getElementById('toggle-trim').checked) {
+        operations.trim = {
+          start: parseFloat(document.getElementById('trim-start').value) || 0,
+          end: parseFloat(document.getElementById('trim-end').value) || null
+        };
+      }
+      if (document.getElementById('toggle-resize').checked) {
+        const preset = document.getElementById('resize-preset').value;
+        if (preset === 'custom') {
+          const w = parseInt(document.getElementById('resize-width').value) || 1280;
+          operations.resize = { width: w, height: -1 };
+        } else {
+          const [w, h] = preset.split(':').map(Number);
+          operations.resize = { width: w, height: h };
+        }
+      }
+      if (document.getElementById('toggle-fps').checked) {
+        operations.fps = { value: parseInt(document.getElementById('fps-value').value) || 30 };
+      }
+      if (document.getElementById('toggle-rotate').checked) {
+        const deg = parseInt(document.querySelector('input[name="rotate-deg"]:checked').value);
+        operations.rotate = { degrees: deg };
+      }
+      if (document.getElementById('toggle-mute').checked) {
+        operations.mute = true;
+      }
+      if (document.getElementById('toggle-extract_audio').checked) {
+        operations.extract_audio = true;
+      }
+      if (document.getElementById('toggle-speed').checked) {
+        operations.speed = { value: parseFloat(document.getElementById('speed-value').value) };
+      }
+
+      try {
+        const evt = await readSSE('/modify',
+          { file_id: currentFileId, operations },
+          ev => { if (ev.percent !== undefined) setProgress('modify', ev.percent, ev.step); }
+        );
+        if (!evt) throw new Error('No response from server');
+        if (evt.error) throw new Error(evt.error);
+        const data = evt.result;
+        hideProgress('modify');
+
+        const resultVal = document.getElementById('modifyResultVal');
+        resultVal.textContent = `${data.output_type === 'audio' ? 'Audio' : 'Video'} · ${data.size_mb} MB · ${data.duration_seconds}s`;
+        const dlBtn = document.getElementById('modifyDlBtn');
+        dlBtn.onclick = () => { window.location.href = '/download/' + data.output_id; };
+        dlBtn.textContent = `↓ Download ${data.output_type === 'audio' ? 'extracted_audio.mp3' : 'modified_video.mp4'}`;
+        document.getElementById('modifyResult').classList.add('active');
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.classList.add('active');
+        hideProgress('modify');
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>

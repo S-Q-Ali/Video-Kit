@@ -1,0 +1,314 @@
+Build a full-stack web application called "VidLab" — a video analysis and processing tool. Use Python (Flask) for the backend and plain HTML/CSS/JavaScript for the frontend. The app must run entirely FREE on Replit with ZERO external APIs — only FFmpeg.
+
+====================
+TECH STACK (100% FREE, NO API KEYS)
+====================
+- Backend: Python 3.11 + Flask
+- Video Processing: FFmpeg + ffprobe (via Replit nix packages)
+- Storage: /tmp directory only (no database, no cloud storage, no paid services)
+- Frontend: Single index.html with vanilla JS (no frameworks)
+- Fonts: Google Fonts (Space Mono + DM Sans)
+- NO external APIs. NO API keys. NO paid services. NOTHING.
+
+====================
+PROJECT FILE STRUCTURE
+====================
+vidlab/
+├── main.py
+├── requirements.txt      # only: flask
+├── .replit               # nix ffmpeg config
+└── templates/
+    └── index.html
+
+====================
+FEATURE 1: VIDEO UPLOAD
+====================
+- Drag & drop zone OR click-to-browse file picker
+- Accept: .mp4, .mov, .avi, .mkv, .webm
+- Max size: 200MB (enforce on frontend and backend)
+- Show file name + size after selection
+- Upload via POST /upload → save to /tmp/<uuid>.<ext> → return {"file_id": "<uuid>", "filename": "..."}
+- Show upload progress bar using XMLHttpRequest with progress event
+- After upload success, show all 3 feature tabs (Analysis, Duplicate, Modify)
+
+====================
+FEATURE 2: DEEP ANALYSIS (FFmpeg only, no AI)
+====================
+POST /analyze  { "file_id": "..." }
+
+Run ffprobe with full JSON output:
+  ffprobe -v quiet -print_format json -show_streams -show_format <filepath>
+
+Extract and return ALL of these fields:
+
+VIDEO:
+- fps → parse r_frame_rate (e.g. "30000/1001" → 29.97, "30/1" → 30.0)
+- resolution → "{width}x{height}"
+- width, height (integers)
+- duration_seconds (float, 2 decimal places)
+- total_frames (int: round(fps × duration))
+- codec → video stream codec_name
+- codec_long → codec_long_name
+- pixel_format → pix_fmt
+- color_space → color_space field (or "unknown")
+- color_range → color_range field (or "unknown")
+- color_primaries → color_primaries (or "unknown")
+- bitrate_kbps → int(format.bit_rate) ÷ 1000
+- video_bitrate_kbps → int(video stream bit_rate) ÷ 1000 if available
+- file_size_mb → float, 2 decimals
+- aspect_ratio → display_aspect_ratio
+- profile → video stream profile (e.g. "High", "Main")
+- level → video stream level
+- nb_frames → number of frames from stream if available
+
+AUDIO:
+- has_audio (bool)
+- audio_codec (or "none")
+- audio_codec_long (or "none")
+- audio_sample_rate (e.g. "44100")
+- audio_channels (int)
+- audio_channel_layout (e.g. "stereo")
+- audio_bitrate_kbps (int or null)
+
+FORMAT:
+- format_name → format.format_name
+- format_long → format.format_long_name
+- nb_streams → int
+
+Also compute these derived stats:
+- quality_score: integer 0-100 calculated from:
+    score = 0
+    if height >= 2160: score += 40
+    elif height >= 1080: score += 30
+    elif height >= 720: score += 20
+    elif height >= 480: score += 10
+    if fps >= 60: score += 20
+    elif fps >= 30: score += 15
+    elif fps >= 24: score += 10
+    if bitrate_kbps >= 8000: score += 20
+    elif bitrate_kbps >= 4000: score += 15
+    elif bitrate_kbps >= 1000: score += 10
+    if codec in ["hevc","h265","av1","vp9"]: score += 20
+    elif codec in ["h264","avc"]: score += 15
+    else: score += 5
+    return min(score, 100)
+
+- quality_label: "Poor" if <40, "Fair" if <60, "Good" if <80, "Excellent" if >=80
+- detected_type: rule-based detection:
+    if width/height ratio > 1.7 and fps >= 23: "Cinematic / Widescreen"
+    elif height > width: "Vertical / Mobile Video"
+    elif fps >= 50: "High Frame Rate Video"
+    elif codec in ["hevc","av1"]: "High Efficiency Video"
+    elif bitrate_kbps < 500: "Compressed / Web Video"
+    else: "Standard Video"
+
+Return all fields as JSON.
+
+FRONTEND DISPLAY for Analysis:
+- Top row: 6 metric cards: FPS | Resolution | Duration | Codec | Bitrate | Quality Score
+- Quality score card shows score + label (color coded: red<40, orange<60, blue<80, green>=80)
+- Second section: "Video Details" — grid of all video fields in label:value pairs
+- Third section: "Audio Details" — grid of audio fields (or "No audio track" if none)
+- Fourth section: "Format Details" — format fields
+- Fifth section: "Derived Analysis" — detected_type, quality breakdown explanation
+- Download button: exports entire JSON as "analysis.json"
+
+====================
+FEATURE 3: DUPLICATE VIDEO (Clean Copy + Frame Extraction)
+====================
+POST /duplicate  { "file_id": "...", "fps_extract": 1 }
+
+Step A — Clean video copy (strip all metadata):
+  ffmpeg -y -i <input> -map_metadata -1 -map_chapters -1 -c:v libx264 -crf 18 -preset fast -c:a aac -movflags +faststart <output_clean.mp4>
+  
+  This removes: all metadata tags, GPS data, device info, creation timestamps, chapter markers
+  Output: /tmp/<uuid>_clean.mp4
+
+Step B — Frame extraction:
+  ffmpeg -y -i <input> -vf fps={fps_extract} /tmp/<uuid>_frames/frame_%04d.jpg -q:v 2
+  Default fps_extract = 1 (1 frame per second)
+  Create output directory first: os.makedirs(frames_dir, exist_ok=True)
+
+Step C — ZIP frames:
+  import zipfile → zip all .jpg files in frames dir → /tmp/<uuid>_frames.zip
+
+Return:
+{
+  "clean_video_id": "<uuid>_clean",
+  "frames_zip_id": "<uuid>_frames",
+  "frame_count": N,
+  "preview_frames": ["frame_0001.jpg", "frame_0002.jpg", ...] (first 6 only),
+  "clean_size_mb": float,
+  "original_size_mb": float
+}
+
+FRONTEND DISPLAY for Duplicate:
+- FPS extract selector: dropdown [0.5, 1, 2, 5, every frame] — default 1
+- "Process" button → show 3-step progress: "Stripping metadata..." → "Extracting frames..." → "Creating ZIP..."
+- After done:
+  - Size comparison: Original X MB → Clean Y MB
+  - Preview grid: 6 thumbnail images (3 columns × 2 rows)
+  - Two download buttons: "Download Clean Video (.mp4)" and "Download All Frames (.zip)"
+  - Frame count shown: "X frames extracted"
+
+====================
+FEATURE 4: MODIFY VIDEO (7 operations)
+====================
+POST /modify  { "file_id": "...", "operations": { ... } }
+
+Operations object can contain any combination of:
+{
+  "trim": { "start": 0, "end": 30 },
+  "resize": { "width": 1280, "height": 720 },
+  "fps": { "value": 30 },
+  "rotate": { "degrees": 90 },
+  "mute": true,
+  "extract_audio": true,
+  "speed": { "value": 1.5 }
+}
+
+Build FFmpeg command dynamically. Order of filters matters:
+1. Input + trim (-ss / -to flags BEFORE -i for fast seek)
+2. Video filters chain: scale, fps, transpose (comma-separated in -vf)
+3. Audio: mute (-an) or speed (atempo)
+4. Speed: video setpts + audio atempo (handle >2x by chaining atempo)
+5. Extract audio: separate command → output .mp3
+
+Rotate filter values:
+  90 CW → transpose=1
+  90 CCW → transpose=2
+  180 → transpose=2,transpose=2
+
+Speed atempo note: atempo only accepts 0.5-2.0, so for 4x speed use: atempo=2.0,atempo=2.0
+For 0.25x speed: atempo=0.5,atempo=0.5
+
+Output: /tmp/<uuid>_modified.mp4 (or .mp3 for audio extract)
+Run ffprobe on output to get new file size and duration.
+
+Return: { "output_id": "...", "output_type": "video"/"audio", "size_mb": float, "duration_seconds": float }
+
+FRONTEND DISPLAY for Modify:
+- 7 operation cards in a 2-column grid, each with a toggle switch
+- When toggled ON, card expands to show controls:
+  1. TRIM: two number inputs (start seconds, end seconds)
+  2. RESIZE: dropdown presets (3840×2160 / 1920×1080 / 1280×720 / 854×480 / 640×360) + custom option with width input
+  3. CHANGE FPS: number input (1-120)
+  4. ROTATE: 3 radio buttons (90° Clockwise / 90° Counter-CW / 180°)
+  5. MUTE AUDIO: just a toggle, no extra controls needed
+  6. EXTRACT AUDIO: just a toggle — changes output to .mp3
+  7. CHANGE SPEED: range slider 0.25x to 4x, step 0.25, show current value
+- "Process Video" button at bottom → spinner
+- Status messages during processing
+- After done: output file info + download button
+
+====================
+FILE SERVING ROUTES
+====================
+GET /download/<file_id> → detect file type and serve:
+  if file_id ends with "_clean" → serve _clean.mp4
+  if file_id ends with "_frames" → serve _frames.zip
+  if file_id ends with "_modified" → serve _modified.mp4 or .mp3
+  else → serve original upload
+  Always use send_file() with as_attachment=True
+
+GET /frame/<file_id>/<frame_name> → serve JPEG frame for thumbnail preview
+  Path: /tmp/<file_id>_frames/<frame_name>
+
+====================
+CLEANUP (important for free tier)
+====================
+On startup, run a background thread that every 30 minutes:
+  - Finds all files in /tmp matching vidlab_* pattern
+  - Deletes files older than 1 hour
+  - Use threading.Timer in a recursive function
+
+====================
+FRONTEND UI DESIGN
+====================
+Dark theme only:
+  --bg: #0a0a0f
+  --surface: #111118
+  --card: #1a1a28
+  --border: #2a2a3a
+  --accent: #00e87a (green)
+  --purple: #7c6fff
+  --text: #e8e8f8
+  --muted: #666680
+  --danger: #ff4466
+  --warning: #ffaa00
+
+Layout:
+- Top navbar: "VidLab" logo (mono font) + "// free video processor — no api keys"
+- Upload zone: full-width drag & drop (dashed border, glow on hover)
+- After upload: 3 tabs appear below: [Analysis] [Duplicate] [Modify]
+- Active tab content area below tabs
+
+CSS grid background:
+  background-image: linear-gradient(rgba(0,232,122,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,232,122,0.03) 1px, transparent 1px);
+  background-size: 44px 44px;
+
+Animations:
+- Upload zone: box-shadow glow pulse on drag-over
+- Metric cards: staggered fadeInUp (animation-delay: 0.05s × index)
+- Tab switch: opacity fade 0.2s
+- Processing spinner: rotating dashed circle border
+- Progress messages: typewriter-style (just show sequentially with setTimeout)
+
+Scrollbar styling:
+  ::-webkit-scrollbar { width: 6px }
+  ::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px }
+
+====================
+BACKEND STRUCTURE (main.py)
+====================
+Imports: flask, subprocess, os, json, uuid, zipfile, threading, time, math
+from flask import Flask, request, jsonify, render_template, send_file
+
+Routes:
+  GET  /               → render index.html
+  POST /upload         → save file, return file_id
+  POST /analyze        → ffprobe + compute derived stats, return JSON
+  POST /duplicate      → ffmpeg clean copy + frame extract + zip
+  POST /modify         → ffmpeg modify chain
+  GET  /download/<id>  → serve file
+  GET  /frame/<id>/<f> → serve frame jpg
+
+Error handling:
+  - All subprocess calls in try/except
+  - Return {"error": "message"} with appropriate HTTP status
+  - If ffmpeg not found: clear message "FFmpeg not installed — add to .replit nix packages"
+  - File not found: 404 with message
+  - File too large: 413 with message
+  - Log all errors with print() including timestamps
+
+====================
+REPLIT CONFIG FILES
+====================
+
+.replit:
+modules = ["python-3.11"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["ffmpeg"]
+
+[deployment]
+run = ["python", "main.py"]
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+
+---
+
+requirements.txt:
+flask==3.0.3
+
+====================
+IMPORTANT: NO API KEYS NEEDED
+====================
+This app uses ZERO external APIs.
+No ANTHROPIC_API_KEY. No Google API. No OpenAI. Nothing.
+Just FFmpeg + Flask. Completely free forever.
+The user only needs to click Run on Replit.

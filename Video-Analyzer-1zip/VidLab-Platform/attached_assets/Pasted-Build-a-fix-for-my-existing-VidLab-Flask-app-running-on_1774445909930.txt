@@ -1,0 +1,42 @@
+Build a fix for my existing VidLab Flask app running on Replit Free tier.
+
+Current issues:
+1. Duplicate → "Every Frame" option fails with:
+   FFmpeg timed out / Disk quota exceeded
+2. Modify → creating _modified.mp4 sometimes fails: Disk quota exceeded
+3. Free tier /tmp storage is limited (~1GB), so extracting all frames for long/high-res videos fills it quickly
+4. Current code sets fps=99999 for "Every Frame", causing timeout / huge disk usage
+5. Frames are not auto-deleted after ZIP, leaving /tmp full
+
+Requirements for the fix:
+
+A. Frame Extraction:
+- "Every Frame" must extract **native frames only**, without setting absurd fps
+- Use FFmpeg command: `ffmpeg -y -i <input> -vsync 0 <frames_dir>/frame_%04d.jpg -q:v 2` (or slightly lower quality like q:v 5 to save disk)
+- Keep "1 fps", "2 fps", etc., working as before
+
+B. Disk Management:
+- Automatically cleanup old `/tmp/vidlab_*` files/folders **before starting any FFmpeg process**
+- Delete frame directories immediately after zipping
+- Optional: limit max frames extracted to 3000 or configurable value to avoid free-tier quota issues
+
+C. Safety & Replit Compatibility:
+- Must run on **Replit free tier**
+- Only use Python + FFmpeg (no external APIs)
+- Use `/tmp` for all temporary storage
+- Must handle errors gracefully:
+  - Disk full → return JSON with {"error": "Disk quota exceeded, try lower FPS or smaller video"}
+  - FFmpeg timeout → return JSON with {"error": "Processing timed out"}
+
+D. Modify Video:
+- `_modified.mp4` must write safely even if /tmp is partially full
+- Cleanup any intermediate files before / after processing
+- Respect original logic: trim, resize, fps, rotate, mute, extract_audio, speed
+
+E. Deliverables:
+- Updated `/duplicate` route Python code (including frame extraction, ZIP, cleanup)
+- Updated `/modify` route Python code (with safe temp management)
+- Ensure "Every Frame" extraction works **for a 31-second 1080p video** without timeout or Disk quota exceeded
+- Minimal changes to frontend; keep UX the same
+
+Output: ready-to-paste Flask backend code fixes only, no additional frontend changes.

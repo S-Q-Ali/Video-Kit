@@ -1,0 +1,323 @@
+You are a senior full-stack engineer.
+
+I already have an EXISTING web application project named:
+
+VIDEO ANALYZER
+
+This project is already built and working on Replit.
+
+Your task is NOT to create a new project.
+
+Your task is to:
+
+1) RESTRUCTURE the EXISTING project into a proper production-level architecture
+2) SEPARATE the project into FRONTEND and BACKEND
+3) ADD a new feature inside the SAME project:
+   YOUTUBE VIDEO DOWNLOADER
+
+Important:
+This must remain ONE single project.
+Do NOT create a second project.
+Just reorganize and extend the existing one.
+
+====================================================
+PRIMARY GOALS
+====================================================
+
+1) Separate Frontend and Backend
+2) Make the app production-ready
+3) Make it deployable on Vercel without issues
+4) Add a modern YouTube downloader feature
+5) Keep existing Video Analyzer functionality working
+6) Improve performance, structure, and maintainability
+
+====================================================
+REQUIRED PROJECT STRUCTURE
+====================================================
+
+Reorganize the EXISTING project into:
+
+project-root/
+
+  frontend/
+    src/
+      components/
+      pages/
+      services/
+      hooks/
+      styles/
+      utils/
+    public/
+    package.json
+    vite.config.js
+
+  backend/
+    src/
+      controllers/
+      routes/
+      services/
+      utils/
+      middleware/
+      config/
+    package.json
+    server.js
+
+  shared/
+    types/
+    constants/
+
+  README.md
+
+====================================================
+FRONTEND REQUIREMENTS
+====================================================
+
+Technology:
+
+React
+Vite
+Modern JavaScript
+Responsive Design
+
+UI Requirements:
+
+Simple
+Beautiful
+Modern
+Fast
+Mobile responsive
+Production level UX
+
+Design:
+
+Clean layout
+Rounded cards
+Soft shadows
+Loading indicators
+Error handling
+Progress bar
+Modern buttons
+Minimalistic interface
+
+Pages:
+
+Home
+Video Analyzer
+YouTube Downloader
+
+Add a new page:
+
+YouTube Downloader
+
+Features:
+
+Input field:
+
+Paste YouTube URL
+
+Button:
+
+Fetch Video Info
+
+After fetching:
+
+Show:
+
+Thumbnail
+Title
+Duration
+Channel Name
+
+Below that:
+
+Quality selection list:
+
+144p
+240p
+360p
+480p
+720p
+1080p
+Highest
+Lowest
+
+Download button
+
+Show:
+
+Progress bar
+Download status
+Error message if failed
+
+====================================================
+BACKEND REQUIREMENTS
+====================================================
+
+Technology:
+
+Node.js
+Express.js
+
+Create REST API:
+
+POST /api/video/info
+
+Input:
+
+youtube_url
+
+Output:
+
+title
+thumbnail
+duration
+available_formats
+
+POST /api/video/download
+
+Input:
+
+youtube_url
+quality
+
+Output:
+
+downloadable file stream
+
+====================================================
+YOUTUBE DOWNLOADER LOGIC
+====================================================
+
+Use:
+
+ytdl-core OR equivalent modern library
+
+Requirements:
+
+Support:
+
+Lowest quality
+Highest quality
+Specific resolution
+
+Auto detect formats
+
+Stream video download
+
+Handle large files safely
+
+====================================================
+PERFORMANCE REQUIREMENTS
+====================================================
+
+Must be:
+
+Fast
+Stable
+Memory efficient
+Non-blocking
+
+Use:
+
+Streaming
+
+Do NOT:
+
+Load full video into memory
+
+====================================================
+ERROR HANDLING
+====================================================
+
+Handle:
+
+Invalid URL
+Video not found
+Private video
+Age restricted video
+Network error
+Timeout
+
+Return clean JSON errors
+
+====================================================
+SECURITY REQUIREMENTS
+====================================================
+
+Add:
+
+Rate limiting
+Input validation
+CORS
+Helmet
+Sanitization
+
+====================================================
+RESPONSIVENESS
+====================================================
+
+Must work perfectly on:
+
+Mobile
+Tablet
+Desktop
+
+====================================================
+UI COMPONENTS REQUIRED
+====================================================
+
+Create reusable components:
+
+VideoCard
+DownloaderForm
+QualitySelector
+ProgressBar
+ErrorMessage
+LoadingSpinner
+
+====================================================
+DEPLOYMENT REQUIREMENTS
+====================================================
+
+Project must be deployable on:
+
+Vercel
+
+Backend:
+
+Must run as serverless functions OR API routes
+
+Frontend:
+
+Must build successfully
+
+npm run build
+
+====================================================
+IMPORTANT RULES
+====================================================
+
+DO NOT:
+
+Create a new project
+Break existing features
+Remove Video Analyzer functionality
+
+DO:
+
+Keep everything working
+Add downloader feature cleanly
+Refactor code into proper structure
+Separate frontend and backend
+
+====================================================
+DELIVERABLES
+====================================================
+
+1) Updated project structure
+2) Working YouTube downloader feature
+3) Separate frontend and backend
+4) Production-ready code
+5) Clean modular architecture
+6) Vercel deployment compatibility
+7) Fully responsive UI
