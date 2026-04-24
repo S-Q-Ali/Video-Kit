@@ -1,7 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm -C .. --filter @workspace/vidlab run build",
-  "_comment": "Set Vercel Root Directory to VidLab-Platform/frontend (formerly artifacts/vidlab). Package name @workspace/vidlab is unchanged.",
   "installCommand": "pnpm -C .. install --frozen-lockfile",
   "outputDirectory": "dist/public",
   "framework": null,
