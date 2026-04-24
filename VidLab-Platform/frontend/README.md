@@ -42,16 +42,19 @@ See `.env.example`.
 
 1. Push the repo to GitHub.
 2. In Vercel, **Import Project** from the GitHub repo.
-3. Set the **Root Directory** to `VidLab-Platform/frontend`. (Vercel automatically picks up `vercel.json`, which uses pnpm filters from the monorepo root.)
+3. Set the **Root Directory** to `VidLab-Platform/frontend`.
 4. Add a **Project Environment Variable**:
    - `VITE_API_BASE_URL` = `https://<your-flask-backend>.replit.app` (no trailing slash)
 5. Deploy.
 
 `vercel.json` configures:
-- `installCommand: pnpm install --frozen-lockfile`
-- `buildCommand: pnpm --filter @workspace/vidlab run build`
+- `installCommand: pnpm -C .. install --frozen-lockfile`
+- `buildCommand: pnpm -C .. --filter @workspace/vidlab run build`
 - `outputDirectory: dist/public`
 - A SPA rewrite so all routes serve `index.html`.
+
+The `-C ..` is important because this frontend package uses workspace `catalog:`
+versions from `VidLab-Platform/pnpm-workspace.yaml`.
 
 ## Deploying the backend on Replit
 
@@ -95,5 +98,5 @@ src/
 ```bash
 pnpm --filter @workspace/vidlab run dev      # Vite dev server
 pnpm --filter @workspace/vidlab run build    # Production build → dist/public
-pnpm --filter @workspace/vidlab run preview  # Preview the production build
+pnpm --filter @workspace/vidlab run serve    # Preview the production build
 ```
