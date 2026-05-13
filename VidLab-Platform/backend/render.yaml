@@ -1,0 +1,22 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy the backend using this file or manually via Render Dashboard.
+# Steps:
+#   1. Push repo to GitHub
+#   2. In Render, create a "Web Service" → "Build and deploy from a Git repo"
+#   3. Select repo, set root directory to "VidLab-Platform/backend"
+#   4. Runtime: Docker
+#   5. Set env vars below
+
+services:
+  - type: web
+    name: vidlab-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: ALLOWED_ORIGINS
+        sync: false    # Set this to your frontend domain (e.g., https://vidlab.vercel.app)
+      - key: VIDLAB_DOWNLOAD_TIMEOUT
+        value: "600"
+    healthCheckPath: /api/video/health

@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.env
+downloads/*
+*.zip
+*.mp4
+*.mp3
+*.wav
+.git
+.gitignore
