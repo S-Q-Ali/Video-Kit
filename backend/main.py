@@ -14,6 +14,7 @@ import shutil
 import glob as glob_module
 
 from youtube_api import youtube_bp
+from api_v1 import api as api_v1_bp
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB
@@ -31,7 +32,7 @@ _env_origins = [o.strip() for o in os.environ.get('ALLOWED_ORIGINS', '').split('
 allowed_origins = _env_origins or _default_origins
 CORS(
     app,
-    resources={r'/api/*': {'origins': allowed_origins}},
+    resources={r'/*': {'origins': allowed_origins}},
     supports_credentials=False,
     max_age=86400,
 )
@@ -47,8 +48,9 @@ limiter = Limiter(
 )
 limiter.limit('30 per minute')(youtube_bp)
 
-# Register the YouTube downloader blueprint at /api/video/*
-app.register_blueprint(youtube_bp)
+# Register blueprints
+app.register_blueprint(youtube_bp)               # /api/video/*
+app.register_blueprint(api_v1_bp)                # /api/v1/*
 
 UPLOAD_FOLDER = '/tmp'
 ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'webm'}
@@ -1690,7 +1692,7 @@ def download_transcript_file(filename):
 if __name__ == '__main__':
     nuke_frame_dirs()
     cleanup_old_files_background()
-    port = int(os.environ.get('PORT', 8080))
+    port = int(os.environ.get('PORT', 8000))
     print(f'[{timestamp()}] VidLab starting on port {port}')
     # threaded=True lets Werkzeug serve multiple requests concurrently and,
     # critically, keep streaming large file responses (e.g. 4K downloads) without

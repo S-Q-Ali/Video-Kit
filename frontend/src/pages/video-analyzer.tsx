@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { API_BASE_URL } from "@/lib/api";
 
 /**
- * The Video Analyzer page embeds the existing Flask UI in an iframe.
- * The Flask app at the backend serves the original analyzer at "/".
+ * Video Analyzer page — embeds the legacy Flask analyzer UI in an iframe.
+ *
+ * In production (VITE_API_BASE_URL set), the iframe points directly to the
+ * backend. In local dev, it goes through the Vite proxy /analyzer-ui → /.
  */
 export default function VideoAnalyzerPage() {
   const analyzerUrl = API_BASE_URL ? `${API_BASE_URL}/` : "/analyzer-ui/";

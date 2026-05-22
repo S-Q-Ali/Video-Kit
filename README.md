@@ -40,23 +40,32 @@ VidLab-Platform/
 - Python 3.10+
 - Node.js 20+
 - FFmpeg (install via `choco install ffmpeg` or `apt install ffmpeg`)
+- pnpm
 
-### Backend
+### One-command start
 
 ```bash
-cd VidLab-Platform/backend
-pip install -r requirements.txt
-python main.py
+# Windows
+.\start.ps1
+
+# Unix / macOS
+chmod +x start.sh && ./start.sh
 ```
 
-The server starts on `http://localhost:8080` and serves both the legacy UI and JSON API.
+### Manual start
 
-### Frontend
-
+Terminal 1 — Backend (Flask):
 ```bash
-# From the monorepo root (VidLab-Platform/)
+cd backend
+pip install -r requirements.txt
+python main.py         # → http://localhost:8000
+```
+
+Terminal 2 — Frontend (Vite):
+```bash
+cd frontend
 pnpm install
-pnpm --filter @workspace/vidlab run dev
+pnpm run dev           # → http://localhost:5173
 ```
 
 ## Features
@@ -68,6 +77,42 @@ pnpm --filter @workspace/vidlab run dev
 - **Frame Extraction** — Export frames at custom FPS, grouped by scene
 - **YouTube Download** — Download videos/audio via yt-dlp with format selection
 
+## API Routes
+
+All analyzer and processing endpoints are available under both the legacy paths and the versioned `/api/v1/` prefix:
+
+| Method | Legacy | Versioned | Purpose |
+|--------|--------|-----------|---------|
+| `GET` | `/` | — | Legacy Flask analyzer UI |
+| `POST` | `/upload` | `/api/v1/upload` | Upload video |
+| `POST` | `/analyze` | `/api/v1/analyze` | Metadata analysis |
+| `POST` | `/duplicate` | `/api/v1/duplicate` | Clean copy + frame extract |
+| `POST` | `/modify` | `/api/v1/modify` | Video modification |
+| `GET` | `/download/<id>` | `/api/v1/download/<id>` | Download processed files |
+| `GET` | `/frame/<dir>/<name>` | `/api/v1/frame/<dir>/<name>` | Serve frame JPEG |
+| `POST` | `/analyze-scenes` | `/api/v1/analyze-scenes` | AI scene analysis |
+| `GET` | `/scene-frame/<dir>/<name>` | `/api/v1/scene-frame/<dir>/<name>` | Scene thumbnail |
+| `POST` | `/generate-transcript` | `/api/v1/generate-transcript` | Speech-to-text transcription |
+| `GET` | `/download-transcript/<name>` | `/api/v1/download-transcript/<name>` | Download transcript |
+| `POST` | — | `/api/video/info` | YouTube video info |
+| `POST` | — | `/api/video/download` | YouTube video download |
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8000` | Flask server port |
+| `ALLOWED_ORIGINS` | localhost origins | Comma-separated CORS origins |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | *(empty)* | Backend URL for production. Empty = same-origin (Vite proxy in dev) |
+| `VITE_DEV_API_PROXY` | `http://localhost:8000` | Dev proxy target override |
+
 ## Scripts
 
 ```bash
@@ -77,7 +122,7 @@ pnpm --filter @workspace/vidlab run build   # Production build
 pnpm --filter @workspace/vidlab run serve   # Preview build
 
 # Backend
-python backend/main.py                       # Start Flask (port 8080)
+cd backend && python main.py                 # Start Flask (port 8000)
 ```
 
 ## Deployment
