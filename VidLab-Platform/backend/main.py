@@ -1372,7 +1372,8 @@ def serve_scene_frame(frames_dir_id, frame_name):
 _whisper_model = None
 _whisper_lock  = threading.Lock()
 
-TRANSCRIPT_MAX_DURATION = 300   # 5 minutes in seconds
+TRANSCRIPT_MAX_DURATION = 300     # 5 minutes in seconds (per-chunk)
+TRANSCRIPT_MAX_CHUNKS   = 12      # max chunks ≈ 60 min total
 
 
 def _load_whisper():
@@ -1395,11 +1396,15 @@ def generate_transcript():
     """
     SSE-streaming transcript generation route.
     Pipeline:
-      1. Check video duration ≤ 5 min.
-      2. Extract 16 kHz mono WAV with FFmpeg.
-      3. Load Whisper tiny model (lazy).
-      4. Transcribe → return full text + per-segment list.
-      5. Delete WAV immediately.
+      1. Probe video duration.
+      2. If > 5 min, split into chunks; for each chunk:
+         a. FFmpeg stream-copy the segment.
+         b. Extract 16 kHz mono WAV.
+         c. Transcribe with Whisper (English).
+         d. Offset timestamps by chunk start.
+         e. Clean up chunk files immediately.
+      3. Merge adjacent segments across chunk boundaries.
+      4. Format and return unified transcript.
     """
     data = request.get_json()
     if not data or 'file_id' not in data:
@@ -1410,14 +1415,11 @@ def generate_transcript():
     if not filepath:
         return jsonify({'error': 'File not found'}), 404
 
-    transcript_id = str(uuid.uuid4())
-    wav_path = f'/tmp/vidlab_{transcript_id}_audio.wav'
-
     def generate():
         yield _sse({'percent': 2, 'step': 'Preparing transcript generation...'})
         pre_process_cleanup()
 
-        # ── Phase 1: Duration check (2-10%) ───────────────────────────────────
+        # ── Phase 1: Probe duration & chunk planning (2-10%) ─────────────────
         yield _sse({'percent': 5, 'step': 'Checking video duration...'})
         try:
             import json as _json
@@ -1428,120 +1430,203 @@ def generate_transcript():
             )
             info     = _json.loads(probe.stdout)
             duration = float(info.get('format', {}).get('duration', 0))
-            if duration > TRANSCRIPT_MAX_DURATION:
-                yield _sse({'error': (
-                    f'Video is {int(duration)}s long — transcript is limited to '
-                    f'{TRANSCRIPT_MAX_DURATION // 60} minutes on the free tier. '
-                    'Trim the video first using the Modify tab.'
-                )})
-                return
         except Exception:
-            duration = 0   # Continue even if probe fails
+            duration = 0
 
-        # ── Phase 2: Extract audio (10-35%) ───────────────────────────────────
-        yield _sse({'percent': 15, 'step': 'Extracting audio at 16 kHz...'})
-        cmd = ['ffmpeg', '-y', '-i', filepath,
-               '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
-               wav_path]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if proc.returncode != 0:
-                yield _sse({'error': 'Audio extraction failed. The video may have no audio track.'})
-                return
-        except subprocess.TimeoutExpired:
-            try: os.remove(wav_path)
-            except: pass
-            yield _sse({'error': 'Audio extraction timed out. Try a shorter video.'})
-            return
-        except FileNotFoundError:
-            yield _sse({'error': 'FFmpeg not installed.'})
-            return
-        except OSError as e:
-            try: os.remove(wav_path)
-            except: pass
-            if 'No space left' in str(e):
-                yield _sse({'error': 'Disk quota exceeded. Please try again later.'})
+        if duration > TRANSCRIPT_MAX_DURATION:
+            n_chunks_raw = int(duration / TRANSCRIPT_MAX_DURATION) + (1 if duration % TRANSCRIPT_MAX_DURATION else 0)
+            n_chunks     = min(n_chunks_raw, TRANSCRIPT_MAX_CHUNKS)
+            if n_chunks < n_chunks_raw:
+                capped_msg = (f' (capped at {TRANSCRIPT_MAX_CHUNKS} chunks = '
+                              f'{TRANSCRIPT_MAX_CHUNKS * TRANSCRIPT_MAX_DURATION // 60} min)')
             else:
-                yield _sse({'error': f'System error: {str(e)[:200]}'})
-            return
+                capped_msg = ''
+            yield _sse({'percent': 8, 'step': (
+                f'Video is {int(duration)}s — splitting into '
+                f'{n_chunks} × 5-min chunks{capped_msg}...'
+            )})
+        else:
+            n_chunks = 1
+            yield _sse({'percent': 8, 'step': f'Video is {int(duration)}s — transcribing in one pass...'})
 
-        if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
-            yield _sse({'error': 'No audio could be extracted. The video may be silent or have no audio track.'})
-            return
-
-        yield _sse({'percent': 35, 'step': 'Audio extracted. Loading Whisper model...'})
-
-        # ── Phase 3: Load Whisper (35-50%) ────────────────────────────────────
+        # ── Phase 2: Load Whisper model once (8-15%) ─────────────────────────
+        yield _sse({'percent': 10, 'step': 'Loading Whisper model...'})
         try:
             _load_whisper()
         except ImportError:
-            try: os.remove(wav_path)
-            except: pass
             yield _sse({'error': 'openai-whisper is not installed.'})
             return
         except MemoryError:
-            try: os.remove(wav_path)
-            except: pass
             yield _sse({'error': 'Not enough RAM to load Whisper. Try a shorter video.'})
             return
         except Exception as e:
-            try: os.remove(wav_path)
-            except: pass
             yield _sse({'error': f'Whisper model load failed: {str(e)[:200]}'})
             return
 
-        yield _sse({'percent': 50, 'step': 'Whisper ready. Transcribing audio (this may take a minute)...'})
+        yield _sse({'percent': 15, 'step': f'Whisper ready. Transcribing {n_chunks} chunk(s)...'})
 
-        # ── Phase 4: Transcribe (50-92%) ──────────────────────────────────────
-        try:
-            result        = _whisper_model.transcribe(wav_path, language=None, fp16=False)
-            raw_text      = result.get('text', '').strip()
-            detected_lang = result.get('language', 'unknown')
-            raw_segs      = result.get('segments', [])
-        except MemoryError:
-            yield _sse({'error': 'Out of memory during transcription. Try a shorter video.'})
-            return
-        except Exception as e:
-            yield _sse({'error': f'Transcription failed: {str(e)[:200]}'})
-            return
-        finally:
-            try: os.remove(wav_path)   # Always clean up WAV
-            except: pass
+        # ── Phase 3: Process chunks sequentially (15-96%) ────────────────────
+        run_id = str(uuid.uuid4())
+        chunk_pct_span = (96 - 15) / n_chunks
 
-        if not raw_text:
+        all_raw_segs   = []
+        all_raw_texts  = []
+        total_word_count = 0
+        detected_lang   = 'unknown'
+
+        for chunk_idx in range(n_chunks):
+            chunk_num    = chunk_idx + 1
+            chunk_start  = chunk_idx * TRANSCRIPT_MAX_DURATION
+            chunk_pct_lo = int(15 + chunk_idx * chunk_pct_span)
+
+            chunk_path = f'/tmp/vidlab_{run_id}_chunk{chunk_num}.mp4'
+            wav_path   = f'/tmp/vidlab_{run_id}_chunk{chunk_num}_audio.wav'
+
+            # ── 3a: Split chunk from source video ────────────────────────────
+            if n_chunks == 1:
+                src_for_audio = filepath
+            else:
+                yield _sse({'percent': chunk_pct_lo, 'step': (
+                    f'Chunk {chunk_num}/{n_chunks}: cutting '
+                    f'{int(chunk_start)}s – {int(chunk_start + TRANSCRIPT_MAX_DURATION)}s...'
+                )})
+                split_cmd = [
+                    'ffmpeg', '-y', '-i', filepath,
+                    '-ss', str(chunk_start), '-t', str(TRANSCRIPT_MAX_DURATION),
+                    '-c', 'copy', chunk_path
+                ]
+                try:
+                    split_proc = subprocess.run(split_cmd, capture_output=True, text=True, timeout=120)
+                    if split_proc.returncode != 0 or not os.path.exists(chunk_path):
+                        yield _sse({'error': f'Chunk {chunk_num} split failed. Try a shorter video.'})
+                        return
+                except subprocess.TimeoutExpired:
+                    yield _sse({'error': f'Chunk {chunk_num} split timed out.'})
+                    return
+                except OSError as e:
+                    if 'No space left' in str(e):
+                        yield _sse({'error': 'Disk quota exceeded during chunk split.'})
+                    else:
+                        yield _sse({'error': f'System error: {str(e)[:200]}'})
+                    return
+
+                src_for_audio = chunk_path
+
+            # ── 3b: Extract audio from this chunk ────────────────────────────
+            yield _sse({'percent': chunk_pct_lo + int(chunk_pct_span * 0.15), 'step': (
+                f'Chunk {chunk_num}/{n_chunks}: extracting audio...'
+            )})
+            cmd = ['ffmpeg', '-y', '-i', src_for_audio,
+                   '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
+                   wav_path]
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if proc.returncode != 0:
+                    if n_chunks > 1:
+                        try: os.remove(chunk_path)
+                        except: pass
+                    yield _sse({'error': f'Chunk {chunk_num}: audio extraction failed. The chunk may have no audio track.'})
+                    return
+            except subprocess.TimeoutExpired:
+                try: os.remove(wav_path)
+                except: pass
+                if n_chunks > 1:
+                    try: os.remove(chunk_path)
+                    except: pass
+                yield _sse({'error': 'Audio extraction timed out. Try a shorter video.'})
+                return
+            except FileNotFoundError:
+                yield _sse({'error': 'FFmpeg not installed.'})
+                return
+            except OSError as e:
+                try: os.remove(wav_path)
+                except: pass
+                if n_chunks > 1:
+                    try: os.remove(chunk_path)
+                    except: pass
+                if 'No space left' in str(e):
+                    yield _sse({'error': 'Disk quota exceeded.'})
+                else:
+                    yield _sse({'error': f'System error: {str(e)[:200]}'})
+                return
+
+            # Delete chunk video immediately to reclaim disk
+            if n_chunks > 1:
+                try: os.remove(chunk_path)
+                except: pass
+
+            if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
+                try: os.remove(wav_path)
+                except: pass
+                if chunk_num < n_chunks:
+                    continue   # silent mid-video chunk — skip
+                yield _sse({'error': 'No audio could be extracted. The video may be silent.'})
+                return
+
+            # ── 3c: Transcribe this chunk ────────────────────────────────────
+            pct_transcribe = chunk_pct_lo + int(chunk_pct_span * 0.40)
+            yield _sse({'percent': pct_transcribe, 'step': (
+                f'Chunk {chunk_num}/{n_chunks}: transcribing...'
+            )})
+            try:
+                result        = _whisper_model.transcribe(wav_path, language='en', fp16=False)
+                raw_text      = result.get('text', '').strip()
+                chunk_lang    = result.get('language', 'unknown')
+                raw_segs      = result.get('segments', [])
+            except MemoryError:
+                yield _sse({'error': 'Out of memory during transcription. Try a shorter video.'})
+                return
+            except Exception as e:
+                yield _sse({'error': f'Chunk {chunk_num} transcription failed: {str(e)[:200]}'})
+                return
+            finally:
+                try: os.remove(wav_path)
+                except: pass
+
+            if chunk_lang != 'unknown':
+                detected_lang = chunk_lang
+
+            # ── 3d: Offset timestamps by chunk start ─────────────────────────
+            if chunk_start > 0:
+                for seg in raw_segs:
+                    seg['start'] += chunk_start
+                    seg['end']   += chunk_start
+
+            if raw_text:
+                all_raw_texts.append(raw_text)
+                all_raw_segs.extend(raw_segs)
+                total_word_count += len(raw_text.split())
+
+        if not all_raw_segs and not all_raw_texts:
             yield _sse({'error': 'Whisper could not detect any speech in this video.'})
             return
 
-        yield _sse({'percent': 93, 'step': 'Formatting transcript...'})
+        # ── Phase 4: Format merged segments (96-98%) ─────────────────────────
+        yield _sse({'percent': 96, 'step': 'Formatting transcript...'})
 
-        # ── Phase 5: Format segments as "Speaker 1 (mm:ss)" blocks (93-96%) ──
-        # Merge segments that are within 1.5 s of each other into one paragraph,
-        # then emit a new Speaker 1 block whenever there is a natural pause.
         def _sec_to_mmss(s):
             m = int(s) // 60
             sec = int(s) % 60
             return f'{m:02d}:{sec:02d}'
 
-        # Build merged paragraph list
-        paragraphs = []   # each item: {'start': float, 'end': float, 'text': str}
-        for seg in raw_segs:
+        # Merge segments within 1.5s of each other into paragraphs
+        paragraphs = []
+        for seg in all_raw_segs:
             txt = seg.get('text', '').strip()
             if not txt:
                 continue
             start = seg['start']
             end   = seg['end']
             if paragraphs and (start - paragraphs[-1]['end']) < 1.5:
-                # Merge into previous paragraph
                 paragraphs[-1]['text'] += ' ' + txt
                 paragraphs[-1]['end']   = end
             else:
                 paragraphs.append({'start': start, 'end': end, 'text': txt})
 
-        # Fallback: if Whisper returned no segments, wrap the full text
-        if not paragraphs and raw_text:
-            paragraphs = [{'start': 0.0, 'end': 0.0, 'text': raw_text}]
+        if not paragraphs and all_raw_texts:
+            combined = ' '.join(all_raw_texts)
+            paragraphs = [{'start': 0.0, 'end': duration, 'text': combined}]
 
-        # Build formatted string and API segment list
         formatted_blocks = []
         api_segments     = []
         for para in paragraphs:
@@ -1557,10 +1642,9 @@ def generate_transcript():
             })
 
         formatted_transcript = '\n\n'.join(formatted_blocks)
-        word_count           = len(raw_text.split())
 
-        # ── Phase 6: Write .txt file (96-98%) ─────────────────────────────────
-        yield _sse({'percent': 96, 'step': 'Saving transcript file...'})
+        # Write .txt file
+        yield _sse({'percent': 98, 'step': 'Saving transcript file...'})
         txt_filename = f'vidlab_{file_id}_transcript.txt'
         txt_path     = f'/tmp/{txt_filename}'
         try:
@@ -1568,17 +1652,17 @@ def generate_transcript():
                 fh.write(formatted_transcript)
         except OSError as e:
             print(f'[{timestamp()}] Could not write transcript .txt: {e}')
-            txt_filename = None   # Non-fatal; JSON still returned
+            txt_filename = None
 
-        print(f'[{timestamp()}] Transcript done: {word_count} words, '
-              f'{len(api_segments)} segments, lang={detected_lang}')
+        print(f'[{timestamp()}] Transcript done: {total_word_count} words, '
+              f'{len(api_segments)} segments, lang={detected_lang}, chunks={n_chunks}')
 
         yield _sse({'percent': 100, 'done': True, 'result': {
             'file_id':    file_id,
             'transcript': formatted_transcript,
             'language':   detected_lang,
             'segments':   api_segments,
-            'word_count': word_count,
+            'word_count': total_word_count,
             'txt_file':   f'/download-transcript/{txt_filename}' if txt_filename else None,
         }})
 
